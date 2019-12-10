@@ -1,0 +1,81 @@
+#!/usr/bin/env python
+
+# example usage:
+# ./ansible-ssh  hostname
+# ./ansible-ssh  hostname -i inventories/staging_name
+
+# Based on https://github.com/Kroid/ansible-ssh
+
+import os
+import sys
+import pdb
+from ansible.inventory.manager import InventoryManager
+from ansible.parsing.dataloader import DataLoader
+from ansible.cli import CLI
+
+DEFAULT_ANSIBLE_HOST = ''
+DEFAULT_ANSIBLE_USER = ''
+DEFAULT_INVENTORY = 'inventories/staging_name'
+
+
+def create_ssh_args(host):
+    ssh_args = ['ssh']
+
+    if ('ansible_private_key_file' in host.vars
+        and host.vars['ansible_private_key_file'] is not None):
+        ssh_args += ("-o", "IdentityFile=\"{0}\"".format(os.path.expanduser(host.vars['ansible_private_key_file'])))
+
+    if ('ansible_port' in host.vars
+        and host.vars['ansible_port'] is not None):
+        ssh_args += ("-o", "Port={0}".format(host.vars['ansible_port']))
+
+    if ('ansible_user' in host.vars
+        and host.vars['ansible_user'] is not None):
+        ssh_args += ("-o", "User={0}".format(host.vars['ansible_user']))
+    else:
+        ssh_args += ("-o", "User={0}".format(DEFAULT_ANSIBLE_USER))
+
+
+    if ('ansible_host' in host.vars
+        and host.vars['ansible_host'] is not None):
+        ssh_args.append("{}".format(host.vars['ansible_host']))
+    else:
+        ssh_args.append("{}".format(DEFAULT_ANSIBLE_HOST))
+
+    return ssh_args
+
+
+def main(argv):
+    if len(argv) < 2:
+        print("You must specify at least one hostname/pattern")
+        return -1
+
+    # Basic Ansible initialisation
+    loader = DataLoader()
+    parser = CLI.base_parser(
+        usage='%prog <host-pattern>',
+        runtask_opts=True,
+        inventory_opts = True,
+    )
+
+    options, args = parser.parse_args()
+    if options.inventory is None:
+        options.inventory = [DEFAULT_INVENTORY]
+
+    pattern = args[0]
+
+    inventory = InventoryManager(loader, options.inventory)
+    hosts = inventory.list_hosts(pattern)
+
+    # We can't ssh to more than one matching host.
+    if len(hosts) != 1:
+        print("Your host pattern matched {} hosts: {}".format(len(hosts), hosts))
+        return -1
+
+    host = hosts[0]
+
+    ssh_args = create_ssh_args(host)
+    os.execl('/usr/bin/ssh', *ssh_args)
+
+if __name__=='__main__':
+    main(sys.argv)

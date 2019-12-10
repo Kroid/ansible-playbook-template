@@ -1,0 +1,1 @@
+machine_name   ansible_host= ansible_port=22 ansible_user= ansible_ssh_pass= ansible_sudo_pass=
